@@ -1,0 +1,14 @@
+version: "1.0"
+settings:
+    download:
+        timeout: 5m0s
+        retries: 3
+        concurrent_downloads: 2
+    proxy:
+        enabled: true
+        shims_in_path: true
+    logging:
+        level: info
+        file: ~/.vman/logs/vman.log
+global_versions: {}
+tools: {}

@@ -1,0 +1,31 @@
+[tool]
+name = "protoc-gen-go-grpc"
+description = "Protocol buffer compiler for gRPC-Go"
+homepage = "https://grpc.io/docs/languages/go/"
+repository = "https://github.com/grpc/grpc-go"
+
+[download]
+type = "github"
+repository = "grpc/grpc-go"
+asset_pattern = "protoc-gen-go-grpc.v{version}.{os}.{arch}.tar.gz"
+extract_binary = "protoc-gen-go-grpc"
+
+[download.arch_mapping]
+"amd64" = "amd64"
+"arm64" = "arm64"
+
+[download.os_mapping]
+"darwin" = "darwin"
+"linux" = "linux"
+"windows" = "windows"
+
+[versions]
+[versions.aliases]
+latest = "1.5.1"
+stable = "1.5.0"
+# 添加用户需要的版本别名
+v1_3_0 = "1.3.0"
+legacy = "1.3.0"
+
+[versions.constraints]
+min_version = "1.3.0"

@@ -1,0 +1,19 @@
+[tool]
+name = "sqlc"
+description = "Generate type-safe code from SQL"
+homepage = "https://sqlc.dev/"
+repository = "https://github.com/sqlc-dev/sqlc"
+
+[download]
+type = "github"
+repository = "sqlc-dev/sqlc"
+asset_pattern = "sqlc_{version}_{os}_{arch}.tar.gz"
+extract_binary = "sqlc"
+
+[versions]
+[versions.aliases]
+latest = "1.26.0"
+stable = "1.25.0"
+
+[versions.constraints]
+min_version = "1.20.0"

@@ -1,0 +1,28 @@
+[tool]
+name = "protoc"
+description = "Protocol Buffers compiler"
+homepage = "https://protobuf.dev/"
+repository = "https://github.com/protocolbuffers/protobuf"
+
+[download]
+type = "github"
+repository = "protocolbuffers/protobuf"
+asset_pattern = "protoc-{version}-{os}-{arch}.zip"
+extract_binary = "bin/protoc"
+
+[download.arch_mapping]
+"amd64" = "x86_64"
+"arm64" = "aarch_64"
+
+[download.os_mapping]
+"darwin" = "osx"
+"linux" = "linux"
+"windows" = "win64"
+
+[versions]
+[versions.aliases]
+latest = "28.0"
+stable = "27.3"
+
+[versions.constraints]
+min_version = "3.0.0"

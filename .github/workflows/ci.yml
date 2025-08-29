@@ -1,0 +1,470 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # 每天凌晨2点运行一次完整测试
+    - cron: '0 2 * * *'
+
+env:
+  GO_VERSION: '1.21'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 代码质量检查
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "以下文件需要格式化:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=5m
+
+  # 单元测试
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    strategy:
+      matrix:
+        go-version: ['1.20', '1.21', '1.22']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic \
+            ./internal/config/... \
+            ./internal/version/... \
+            ./internal/storage/... \
+            ./internal/download/... \
+            ./internal/proxy/... \
+            ./internal/cli/... \
+            ./pkg/...
+
+      - name: Upload coverage to Codecov
+        if: matrix.go-version == '1.21'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  # 集成测试
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run integration tests
+        run: go test -race -timeout=30m ./test/integration/...
+
+  # 功能测试
+  functional-tests:
+    name: Functional Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run functional tests
+        run: go test -race -timeout=30m -short ./test/functional/...
+
+  # 多平台测试
+  cross-platform-tests:
+    name: Cross Platform Tests
+    runs-on: ${{ matrix.os }}
+    needs: unit-tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.21']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run platform compatibility tests
+        run: go test -race -short ./test/integration/platform_compatibility_test.go
+
+      - name: Build for current platform
+        run: go build -o vman ./cmd/vman
+
+      - name: Test binary execution
+        run: ./vman version || echo "Binary test completed"
+        if: runner.os != 'Windows'
+
+      - name: Test binary execution (Windows)
+        run: .\vman.exe version || echo "Binary test completed"
+        if: runner.os == 'Windows'
+
+  # 性能测试
+  benchmark-tests:
+    name: Benchmark Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -timeout=30m \
+            ./internal/config/... \
+            ./internal/version/... \
+            ./internal/download/... \
+            ./internal/proxy/... \
+            > benchmark_results.txt 2>&1 || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark_results.txt
+
+  # 安全扫描
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run Gosec Security Scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: './...'
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  # 依赖检查
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check for outdated dependencies
+        run: |
+          go list -u -m all > dependency_report.txt
+          echo "依赖报告:" 
+          cat dependency_report.txt
+
+      - name: Upload dependency report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-report
+          path: dependency_report.txt
+
+  # 构建测试
+  build-test:
+    name: Build Test
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          binary_name="vman-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary_name="${binary_name}.exe"
+          fi
+          
+          go build -ldflags="-X main.version=${GITHUB_SHA} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "${binary_name}" ./cmd/vman
+          
+          echo "构建成功: ${binary_name}"
+          ls -la "${binary_name}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: vman-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: vman-${{ matrix.goos }}-${{ matrix.goarch }}*
+
+  # 发布准备（仅在主分支）
+  release-prepare:
+    name: Release Prepare
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build-test, cross-platform-tests, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          for dir in vman-*; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"/* release/
+            fi
+          done
+          ls -la release/
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-artifacts
+          path: release/
+
+  # 测试报告
+  test-report:
+    name: Test Report
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [unit-tests, integration-tests, functional-tests, cross-platform-tests, benchmark-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate test report
+        run: |
+          echo "# vman 测试报告" > test_report.md
+          echo "" >> test_report.md
+          echo "**运行时间:** $(date)" >> test_report.md
+          echo "**提交:** ${{ github.sha }}" >> test_report.md
+          echo "**分支:** ${{ github.ref }}" >> test_report.md
+          echo "" >> test_report.md
+          
+          echo "## 测试结果" >> test_report.md
+          echo "" >> test_report.md
+          
+          if [ "${{ needs.unit-tests.result }}" = "success" ]; then
+            echo "✅ 单元测试: 通过" >> test_report.md
+          else
+            echo "❌ 单元测试: 失败" >> test_report.md
+          fi
+          
+          if [ "${{ needs.integration-tests.result }}" = "success" ]; then
+            echo "✅ 集成测试: 通过" >> test_report.md
+          else
+            echo "❌ 集成测试: 失败" >> test_report.md
+          fi
+          
+          if [ "${{ needs.functional-tests.result }}" = "success" ]; then
+            echo "✅ 功能测试: 通过" >> test_report.md
+          else
+            echo "❌ 功能测试: 失败" >> test_report.md
+          fi
+          
+          if [ "${{ needs.cross-platform-tests.result }}" = "success" ]; then
+            echo "✅ 跨平台测试: 通过" >> test_report.md
+          else
+            echo "❌ 跨平台测试: 失败" >> test_report.md
+          fi
+          
+          if [ "${{ needs.benchmark-tests.result }}" = "success" ]; then
+            echo "✅ 性能测试: 通过" >> test_report.md
+          else
+            echo "❌ 性能测试: 失败" >> test_report.md
+          fi
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test_report.md
+
+      - name: Comment PR with test report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const testReport = fs.readFileSync('test_report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: testReport
+            });

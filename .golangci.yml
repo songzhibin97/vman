@@ -1,0 +1,246 @@
+# golangci-lint配置文件
+# 文档: https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor
+    - test/tmp
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_gen\\.go$"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters-settings:
+  govet:
+    check-shadowing: true
+    settings:
+      printf:
+        funcs:
+          - (github.com/sirupsen/logrus.FieldLogger).Infof
+          - (github.com/sirupsen/logrus.FieldLogger).Warnf
+          - (github.com/sirupsen/logrus.FieldLogger).Errorf
+          - (github.com/sirupsen/logrus.FieldLogger).Fatalf
+
+  golint:
+    min-confidence: 0
+
+  gocyclo:
+    min-complexity: 15
+
+  maligned:
+    suggest-new: true
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+
+  depguard:
+    list-type: blacklist
+    packages:
+      # logging is allowed only by sirupsen/logrus
+      - github.com/pkg/errors
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 140
+
+  goimports:
+    local-prefixes: github.com/songzhibin97/vman
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+
+  funlen:
+    lines: 100
+    statements: 50
+
+  gocognit:
+    min-complexity: 20
+
+  nestif:
+    min-complexity: 4
+
+  gomnd:
+    settings:
+      mnd:
+        # don't include the "operation" and "assign"
+        checks: argument,case,condition,return
+        ignored-numbers: 0,1,2,3,10
+        ignored-functions: strconv.FormatInt,strconv.ParseInt
+
+  errorlint:
+    errorf: true
+
+  exhaustive:
+    default-signifies-exhaustive: false
+
+  revive:
+    min-confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - deadcode
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - errorlint
+    - exhaustive
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gomnd
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - nestif
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+    - exportloopref
+    - gocognit
+
+issues:
+  exclude-use-default: false
+  exclude:
+    # for "public interface" warning
+    - "should have( a package)? comment or be unexported"
+    # EXC0002 golint: Annoying issue about not having a comment. The rare codebase has such comments
+    - "should have a package comment, unless it's in another file for this package"
+    # EXC0003 staticcheck: Test are not relevant for this linter
+    - "SA9003:"
+    # EXC0004 govet: Common false positives
+    - "possible misuse of unsafe.Pointer"
+    # EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore
+    - "SA4008:"
+    # EXC0006 gosec: Too many false-positives on 'unsafe' usage
+    - "G103:"
+    # EXC0007 gosec: Too many false-positives for parametrized shell calls
+    - "G204:"
+    # EXC0008 gosec: Duplicated errcheck checks
+    - "G104:"
+    # EXC0009 gosec: Too many issues in popular repos
+    - "(G201|G202):"
+    # EXC0010 gosec: False positive is triggered by 'src, err := ioutil.ReadFile(filename)'
+    - "G304:"
+    # EXC0011 stylecheck: Annoying issue about not having a comment. The rare codebase has such comments
+    - "ST1000:"
+    # EXC0012 revive: Annoying issue about not having a comment. The rare codebase has such comments
+    - "exported (.+) should have comment( or be unexported)?"
+    # EXC0013 revive: Annoying issue about not having a comment. The rare codebase has such comments
+    - "package comment should be of the form \"(.+)...\""
+    # EXC0014 revive: Annoying issue about not having a comment. The rare codebase has such comments
+    - "comment on exported (.+) should be of the form \"(.+)...\""
+    # EXC0015 revive: Annoying issue about not having a comment. The rare codebase has such comments
+    - "should have a package comment"
+
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gomnd
+        - funlen
+        - gocognit
+        - dupl
+        - lll
+        - gosec
+
+    - path: test/
+      linters:
+        - gomnd
+        - funlen
+        - gocognit
+        - dupl
+        - lll
+        - gosec
+        - errcheck
+
+    - path: testutils/
+      linters:
+        - gomnd
+        - funlen
+        - gocognit
+        - dupl
+        - lll
+        - gosec
+        - errcheck
+
+    - path: cmd/
+      linters:
+        - gomnd
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  new: false
+  new-from-rev: ""
+  new-from-patch: ""

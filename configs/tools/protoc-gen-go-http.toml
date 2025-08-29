@@ -1,0 +1,31 @@
+[tool]
+name = "protoc-gen-go-http"
+description = "Protocol buffer compiler for Go HTTP API"
+homepage = "https://github.com/go-kratos/kratos"
+repository = "https://github.com/go-kratos/kratos"
+
+[download]
+type = "github"
+repository = "go-kratos/kratos"
+asset_pattern = "protoc-gen-go-http_{os}_{arch}.tar.gz"
+extract_binary = "protoc-gen-go-http"
+
+[download.arch_mapping]
+"amd64" = "amd64"
+"arm64" = "arm64"
+
+[download.os_mapping]
+"darwin" = "darwin"
+"linux" = "linux"
+"windows" = "windows"
+
+[versions]
+[versions.aliases]
+latest = "2.8.0"
+stable = "2.7.3"
+# 添加用户需要的版本别名
+v2_7_0 = "2.7.0"
+legacy = "2.7.0"
+
+[versions.constraints]
+min_version = "2.0.0"
