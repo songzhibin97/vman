@@ -5,9 +5,9 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-  schedule:
-    # 每天凌晨2点运行一次完整测试
-    - cron: '0 2 * * *'
+#  schedule:
+#    # 每天凌晨2点运行一次完整测试
+#    - cron: '0 2 * * *'
 
 env:
   GO_VERSION: '1.21'
